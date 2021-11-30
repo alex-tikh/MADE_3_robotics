@@ -51,21 +51,24 @@ class Window():
     def go(self, event):
         
         self.delete_path()
-        path = self.get_a_star_path(self.cost_function, 40)
+        start_pos = self.get_start_position()
+        path = self.get_a_star_path([start_pos], self.cost_function, 60, 0., 700, 600)
+        path2 = self.get_a_star_path(path, self.cost_function, 20, 350., 0, 50)
+        path = path + path2
         self.path_object_ids = self.draw_result(path)
 
 
-    def get_a_star_path(self, cost_function, step_size):
+    def get_a_star_path(self, path, cost_function, step_size, angle_weight, angle_weight_2, thr):
         
         heap_list = []
         history = set()
-        path = []
+        path = path
         
-        start_pos = self.get_start_position()
-        print(start_pos)
-        path.append(start_pos)
+        # start_pos = self.get_start_position()
+        # print(start_pos)
+        # path.append(start_pos)
         
-        cost = cost_function(start_pos)
+        cost = cost_function(path[-1], angle_weight, angle_weight_2)
         # use prior distance as tie-breaker
         prior = (len(path) - 1) * step_size
         entry = (cost, prior, path)
@@ -74,7 +77,7 @@ class Window():
         while len(heap_list) != 0:
             _, _, path = heapq.heappop(heap_list)
             
-            if cost_function(path[-1]) < 50:
+            if cost_function(path[-1], angle_weight, angle_weight_2) < thr:
                 print('target is found (according to cost function)')
                 break
 
@@ -88,7 +91,7 @@ class Window():
                 history.add((round(next_pos[0], 1), round(next_pos[1], 1), round(next_pos[2], 1)))
                 prior = (len(path_next) - 1) * step_size
 
-                cost = cost_function(next_pos)
+                cost = cost_function(next_pos, angle_weight, angle_weight_2)
                 entry = (prior + cost, prior, path_next)
                 heapq.heappush(heap_list, entry)
                 
@@ -96,7 +99,7 @@ class Window():
             self.draw_path(path)
         return path
 
-    def cost_function(self, position):
+    def cost_function(self, position, angle_weight, angle_weight_2):
         
         target_x, target_y, target_yaw = self.get_target_position()
         x, y, yaw = position
@@ -108,8 +111,23 @@ class Window():
         
         if rotation > math.pi:
             rotation = abs(rotation - 2 * math.pi)
+            
+        path_yaw = math.atan(abs(x_diff / y_diff))
+        if (x_diff >= 0) and (y_diff >= 0):
+            path_yaw = math.pi - path_yaw
+        elif (x_diff <= 0) and (y_diff >= 0):
+            path_yaw = path_yaw - math.pi
+        elif (x_diff >= 0) and (y_diff <= 0):
+            path_yaw = path_yaw
+        elif (x_diff <= 0) and (y_diff <= 0):
+            path_yaw = -path_yaw
+            
+        rotation_2 = abs(path_yaw - target_yaw)
         
-        return distance  + 350 * rotation
+        if rotation_2 > math.pi:
+            rotation_2 = abs(rotation_2 - 2 * math.pi)
+        
+        return distance  + angle_weight * rotation + angle_weight_2 * rotation_2
 
 
     def get_next_positions(self, position, step_size):
